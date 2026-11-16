@@ -1,0 +1,13 @@
+{
+  "itemGroup.dark_spirit": "Example Mod Tab",
+  "block.dark_spirit.example_block": "Example Block",
+  "item.dark_spirit.example_item": "Example Item",
+
+  "dark_spirit.configuration.title": "Dark Spirit Configs",
+  "dark_spirit.configuration.section.dark_spirit.common.toml": "Dark Spirit Configs",
+  "dark_spirit.configuration.section.dark_spirit.common.toml.title": "Dark Spirit Configs",
+  "dark_spirit.configuration.items": "Item List",
+  "dark_spirit.configuration.logDirtBlock": "Log Dirt Block",
+  "dark_spirit.configuration.magicNumberIntroduction": "Magic Number Text",
+  "dark_spirit.configuration.magicNumber": "Magic Number"
+}
