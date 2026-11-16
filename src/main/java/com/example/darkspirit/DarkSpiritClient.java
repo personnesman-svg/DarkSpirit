@@ -5,6 +5,7 @@ import com.geckolib.renderer.GeoEntityRenderer;
 
 // Событие регистрации рендереров NeoForge.
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import com.example.darkspirit.client.model.DarkSpiritModel;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -37,12 +38,12 @@ public class DarkSpiritClient {
     @SubscribeEvent
     static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
 
-        // Подключаем GeoEntityRenderer к нашему типу существа.
+        // Подключаем собственную модель Духа тьмы.
         event.registerEntityRenderer(
                 ModEntities.DARK_SPIRIT.get(),
                 context -> new GeoEntityRenderer<>(
                         context,
-                        ModEntities.DARK_SPIRIT.get()));
+                        new DarkSpiritModel()));
     }
 
     @SubscribeEvent
