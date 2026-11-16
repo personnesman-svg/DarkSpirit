@@ -84,6 +84,8 @@ public class DarkSpirit {
     public DarkSpirit(IEventBus modEventBus, ModContainer modContainer) {
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
+        // Регистрируем характеристики Духа тьмы.
+        modEventBus.addListener(ModEntities::registerAttributes);
         // Регистрируем сущности нашего мода.
         ModEntities.ENTITY_TYPES.register(modEventBus);
 
