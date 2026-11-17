@@ -1,6 +1,6 @@
 package com.example.darkspirit.entity;
 
-import com.example.darkspirit.entity.goal.RandomFlyingGoal;
+import net.minecraft.world.entity.monster.Ghast;
 
 // GeckoLib 5: анимации сущности.
 import com.geckolib.animatable.GeoEntity;
@@ -46,10 +46,10 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     protected void registerGoals() {
         super.registerGoals();
 
-        // Дух случайным образом перемещается по воздуху.
+        // Используем ванильную систему случайного полёта гастов.
         this.goalSelector.addGoal(
                 5,
-                new RandomFlyingGoal(this, 1.0, 50));
+                new Ghast.RandomFloatAroundGoal(this));
     }
 
     /**
