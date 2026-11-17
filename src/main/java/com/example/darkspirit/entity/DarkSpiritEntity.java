@@ -46,6 +46,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
 
     // Проверяем, запомнили ли мы начальное положение.
     private boolean flightCenterSet = false;
+    // Сколько тиков дух должен отдыхать между перелётами.
+    private int flightPauseTicks = 0;
 
     /**
      * Регистрирует цели поведения Духа тьмы.
@@ -96,6 +98,15 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         }
 
         super.tick();
+
+        // Во время отдыха постепенно гасим скорость движения.
+        if (!this.level().isClientSide() && this.flightPauseTicks > 0) {
+            this.flightPauseTicks--;
+
+            // Плавно уменьшаем скорость, а не останавливаем духа резко.
+            this.setDeltaMovement(
+                    this.getDeltaMovement().scale(0.80D));
+        }
     }
 
     /**
@@ -144,6 +155,14 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
 
         private final DarkSpiritEntity spirit;
 
+        // Координаты выбранной точки полёта.
+        private double targetX;
+        private double targetY;
+        private double targetZ;
+
+        // Сколько тиков длится текущий перелёт.
+        private int flightTicks;
+
         public BoundedRandomFlightGoal(DarkSpiritEntity spirit) {
             this.spirit = spirit;
 
@@ -156,47 +175,84 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
          */
         @Override
         public boolean canUse() {
-
-            // Дух должен знать своё начальное положение.
-            // Также он не должен продолжать предыдущий перелёт.
-            // Случайная проверка создаёт паузы между перелётами.
             return this.spirit.flightCenterSet
-                    && !this.spirit.getMoveControl().hasWanted()
-                    && this.spirit.getRandom().nextInt(20) == 0;
+                    && this.spirit.flightPauseTicks <= 0
+                    && !this.spirit.getMoveControl().hasWanted();
         }
 
         /**
-         * Продолжаем цель, пока дух летит к выбранной точке.
+         * Проверяем, нужно ли продолжать перелёт.
          */
         @Override
         public boolean canContinueToUse() {
-            return this.spirit.getMoveControl().hasWanted();
+
+            double dx = this.targetX - this.spirit.getX();
+            double dy = this.targetY - this.spirit.getY();
+            double dz = this.targetZ - this.spirit.getZ();
+
+            // Считаем расстояние до точки назначения.
+            double distanceSquared = dx * dx + dy * dy + dz * dz;
+
+            // Заканчиваем перелёт, когда приблизились к точке
+            // или если слишком долго не можем до неё добраться.
+            return distanceSquared > 2.25
+                    && this.flightTicks < 100;
         }
 
         /**
-         * Выбираем новую точку в ограниченной области.
+         * Выбираем новую точку для перелёта.
          */
         @Override
         public void start() {
 
-            // Случайная координата X: не дальше 8 блоков от центра.
-            double x = this.spirit.flightCenterX
-                    + this.spirit.getRandom().nextInt(17) - 8;
+            this.flightTicks = 0;
 
-            // Случайная координата Y: не дальше 4 блоков от центра.
-            double y = this.spirit.flightCenterY
-                    + this.spirit.getRandom().nextInt(9) - 4;
+            // Выбираем случайное горизонтальное направление.
+            double angle = this.spirit.getRandom().nextDouble()
+                    * Math.PI * 2.0;
 
-            // Случайная координата Z: не дальше 8 блоков от центра.
-            double z = this.spirit.flightCenterZ
-                    + this.spirit.getRandom().nextInt(17) - 8;
+            // Расстояние перелёта: от 2.5 до 6 блоков.
+            double distance = 2.5
+                    + this.spirit.getRandom().nextDouble() * 3.5;
 
-            // Направляем духа к выбранной точке.
+            // Вычисляем координаты новой точки.
+            this.targetX = this.spirit.flightCenterX
+                    + Math.cos(angle) * distance;
+
+            this.targetZ = this.spirit.flightCenterZ
+                    + Math.sin(angle) * distance;
+
+            // Высота меняется незначительно: максимум на 0.6 блока.
+            this.targetY = this.spirit.flightCenterY
+                    + (this.spirit.getRandom().nextDouble() * 1.2 - 0.6);
+
+            // Начинаем плавный перелёт.
             this.spirit.getMoveControl().setWantedPosition(
-                    x,
-                    y,
-                    z,
-                    0.7);
+                    this.targetX,
+                    this.targetY,
+                    this.targetZ,
+                    0.35);
+        }
+
+        /**
+         * Обновляем время текущего перелёта.
+         */
+        @Override
+        public void tick() {
+            this.flightTicks++;
+        }
+
+        /**
+         * Останавливаемся после завершения перелёта.
+         */
+        @Override
+        public void stop() {
+
+            // Сбрасываем текущую команду движения.
+            this.spirit.getMoveControl().setWait();
+
+            // Даём духу 3 секунды отдыха.
+            this.spirit.flightPauseTicks = 60;
         }
     }
 
