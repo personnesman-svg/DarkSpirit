@@ -1,58 +1,84 @@
-
 package com.example.darkspirit.entity;
 
-// Импорты GeckoLib 5
+// GeckoLib 5: анимации сущности.
 import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
-import com.geckolib.util.GeckoLibUtil;
 import com.geckolib.animation.AnimationController;
 import com.geckolib.animation.RawAnimation;
+import com.geckolib.util.GeckoLibUtil;
 
-// Импорты Minecraft
+// Minecraft: сущность и полёт.
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.control.FlyingMoveControl;
+import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Основной класс существа «Дух тьмы».
  *
- * Mob — базовый класс мобов Minecraft.
- * GeoEntity — подключает поддержку анимаций GeckoLib.
+ * PathfinderMob — моб с поддержкой поиска пути.
+ * FlyingMoveControl — управление перемещением в воздухе.
+ * FlyingPathNavigation — прокладывание маршрутов для летающего моба.
+ * GeoEntity — поддержка анимаций GeckoLib.
  * Enemy — обозначает враждебное существо.
  */
-public class DarkSpiritEntity extends Mob implements GeoEntity, Enemy {
+public class DarkSpiritEntity extends PathfinderMob implements GeoEntity {
 
-    // Отдельное хранилище анимаций для каждого экземпляра духа.
+    // Хранилище анимаций GeckoLib.
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+
     // Постоянная анимация покоя без копья.
     private static final RawAnimation IDLE_WITHOUT_SPEAR = RawAnimation.begin().thenLoop("idle2");
 
     /**
      * Создаёт новый экземпляр Духа тьмы.
-     *
-     * @param entityType зарегистрированный тип существа
-     * @param level      мир, в котором находится существо
      */
     public DarkSpiritEntity(
-            EntityType<? extends Mob> entityType,
+            EntityType<? extends PathfinderMob> entityType,
             Level level) {
         super(entityType, level);
+
+        // Устанавливаем управление перемещением в воздухе.
+        this.moveControl = new FlyingMoveControl(this, 10, true);
+
+        // Отключаем гравитацию.
+        this.setNoGravity(true);
     }
 
     /**
-     * Здесь будут регистрироваться контроллеры анимаций:
-     * idle, idle2, fly, attack и teleport.
+     * Создаёт навигацию, предназначенную для полёта.
      */
+    @Override
+    protected PathNavigation createNavigation(Level level) {
+        return new FlyingPathNavigation(this, level);
+    }
+
     /**
-     * Регистрирует контроллеры анимаций Духа тьмы.
+     * Используем физику полёта вместо обычного передвижения по земле.
+     */
+    @Override
+    public void travel(Vec3 input) {
+
+        if (this.isEffectiveAi()) {
+            // Перемещение с использованием физики полёта.
+            this.travelFlying(input, 0.02F);
+        } else {
+            // Клиентская сторона использует стандартную обработку движения.
+            super.travel(input);
+        }
+    }
+
+    /**
+     * Регистрирует контроллеры анимаций.
      */
     @Override
     public void registerControllers(
             AnimatableManager.ControllerRegistrar controllers) {
-
-        // Основной контроллер постоянно воспроизводит анимацию idle2.
         controllers.add(
                 new AnimationController<>(
                         "base",
@@ -60,7 +86,7 @@ public class DarkSpiritEntity extends Mob implements GeoEntity, Enemy {
     }
 
     /**
-     * Возвращает хранилище состояния анимаций GeckoLib.
+     * Возвращает хранилище анимаций GeckoLib.
      */
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
