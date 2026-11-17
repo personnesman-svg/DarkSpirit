@@ -6,6 +6,8 @@ import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.util.GeckoLibUtil;
+import com.geckolib.animation.AnimationController;
+import com.geckolib.animation.RawAnimation;
 
 // Импорты Minecraft
 import net.minecraft.world.entity.EntityType;
@@ -23,19 +25,19 @@ import net.minecraft.world.level.Level;
 public class DarkSpiritEntity extends Mob implements GeoEntity, Enemy {
 
     // Отдельное хранилище анимаций для каждого экземпляра духа.
-    private final AnimatableInstanceCache geoCache =
-            GeckoLibUtil.createInstanceCache(this);
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+    // Постоянная анимация покоя без копья.
+    private static final RawAnimation IDLE_WITHOUT_SPEAR = RawAnimation.begin().thenLoop("idle2");
 
     /**
      * Создаёт новый экземпляр Духа тьмы.
      *
      * @param entityType зарегистрированный тип существа
-     * @param level мир, в котором находится существо
+     * @param level      мир, в котором находится существо
      */
     public DarkSpiritEntity(
             EntityType<? extends Mob> entityType,
-            Level level
-    ) {
+            Level level) {
         super(entityType, level);
     }
 
@@ -43,11 +45,18 @@ public class DarkSpiritEntity extends Mob implements GeoEntity, Enemy {
      * Здесь будут регистрироваться контроллеры анимаций:
      * idle, idle2, fly, attack и teleport.
      */
+    /**
+     * Регистрирует контроллеры анимаций Духа тьмы.
+     */
     @Override
     public void registerControllers(
-            AnimatableManager.ControllerRegistrar controllers
-    ) {
-        // Контроллеры добавим на следующем этапе.
+            AnimatableManager.ControllerRegistrar controllers) {
+
+        // Основной контроллер постоянно воспроизводит анимацию idle2.
+        controllers.add(
+                new AnimationController<>(
+                        "base",
+                        state -> state.setAndContinue(IDLE_WITHOUT_SPEAR)));
     }
 
     /**
