@@ -20,6 +20,9 @@ import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 
 /**
  * Основной класс существа «Дух тьмы».
@@ -49,19 +52,29 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     // Сколько тиков дух должен отдыхать между перелётами.
     private int flightPauseTicks = 0;
 
-    /**
-     * Регистрирует цели поведения Духа тьмы.
-     */
     @Override
     protected void registerGoals() {
         super.registerGoals();
 
-        // Летаем вокруг места появления и не удаляемся бесконечно.
+        // Приоритет 1: ищем ближайшего игрока.
+        this.targetSelector.addGoal(
+                1,
+                new NearestAttackableTargetGoal<>(
+                        this,
+                        Player.class,
+                        true));
+
+        // Приоритет 2: преследуем найденного игрока.
+        this.goalSelector.addGoal(
+                2,
+                new ChasePlayerGoal(this));
+
+        // Приоритет 5: спокойно летаем, когда игрока рядом нет.
         this.goalSelector.addGoal(
                 5,
                 new BoundedRandomFlightGoal(this));
 
-        // Поворачиваем тело в направлении движения.
+        // Приоритет 7: управление поворотом тела.
         this.goalSelector.addGoal(
                 7,
                 new Ghast.GhastLookGoal(this));
@@ -146,6 +159,88 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                             // Если дух остановился, включаем анимацию покоя.
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
                         }));
+    }
+
+    /**
+     * Преследует ближайшего обнаруженного игрока.
+     */
+    private static class ChasePlayerGoal extends Goal {
+
+        private final DarkSpiritEntity spirit;
+
+        public ChasePlayerGoal(DarkSpiritEntity spirit) {
+            this.spirit = spirit;
+
+            // Во время преследования управляем движением и взглядом.
+            this.setFlags(EnumSet.of(
+                    Goal.Flag.MOVE,
+                    Goal.Flag.LOOK));
+        }
+
+        /**
+         * Проверяем, есть ли живая цель.
+         */
+        @Override
+        public boolean canUse() {
+            LivingEntity target = this.spirit.getTarget();
+
+            return target != null && target.isAlive();
+        }
+
+        /**
+         * Продолжаем преследование, пока цель жива.
+         */
+        @Override
+        public boolean canContinueToUse() {
+            LivingEntity target = this.spirit.getTarget();
+
+            return target != null && target.isAlive();
+        }
+
+        /**
+         * Выполняем преследование каждый игровой тик.
+         */
+        @Override
+        public void tick() {
+
+            LivingEntity target = this.spirit.getTarget();
+
+            if (target == null) {
+                return;
+            }
+
+            // Поворачиваем взгляд в сторону игрока.
+            this.spirit.getLookControl().setLookAt(
+                    target,
+                    30.0F,
+                    30.0F);
+
+            // Вычисляем расстояние до игрока.
+            double distanceSquared = this.spirit.distanceToSqr(target);
+
+            // Если игрок дальше 6 блоков — приближаемся.
+            if (distanceSquared > 36.0D) {
+
+                this.spirit.getMoveControl().setWantedPosition(
+                        target.getX(),
+                        target.getY() + 1.0D,
+                        target.getZ(),
+                        0.55D);
+
+            } else {
+
+                // Если приблизились — прекращаем движение.
+                this.spirit.getMoveControl().setWait();
+            }
+        }
+
+        /**
+         * Завершаем движение, если цель потеряна.
+         */
+        @Override
+        public void stop() {
+            this.spirit.getMoveControl().setWait();
+        }
     }
 
     /**
