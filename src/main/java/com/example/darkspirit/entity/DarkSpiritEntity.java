@@ -1,5 +1,7 @@
 package com.example.darkspirit.entity;
 
+import com.example.darkspirit.entity.goal.RandomFlyingGoal;
+
 // GeckoLib 5: анимации сущности.
 import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
@@ -27,13 +29,28 @@ import net.minecraft.world.phys.Vec3;
  * GeoEntity — поддержка анимаций GeckoLib.
  * Enemy — обозначает враждебное существо.
  */
-public class DarkSpiritEntity extends PathfinderMob implements GeoEntity {
+public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy {
 
     // Хранилище анимаций GeckoLib.
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
     // Постоянная анимация покоя без копья.
     private static final RawAnimation IDLE_WITHOUT_SPEAR = RawAnimation.begin().thenLoop("idle2");
+    // Анимация движения в воздухе.
+    private static final RawAnimation FLY = RawAnimation.begin().thenLoop("fly");
+
+    /**
+     * Регистрирует цели поведения Духа тьмы.
+     */
+    @Override
+    protected void registerGoals() {
+        super.registerGoals();
+
+        // Дух случайным образом перемещается по воздуху.
+        this.goalSelector.addGoal(
+                5,
+                new RandomFlyingGoal(this, 1.0, 50));
+    }
 
     /**
      * Создаёт новый экземпляр Духа тьмы.
@@ -82,7 +99,17 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity {
         controllers.add(
                 new AnimationController<>(
                         "base",
-                        state -> state.setAndContinue(IDLE_WITHOUT_SPEAR)));
+                        5,
+                        state -> {
+
+                            // Если дух движется, включаем анимацию полёта.
+                            if (state.isMoving()) {
+                                return state.setAndContinue(FLY);
+                            }
+
+                            // Если дух остановился, включаем анимацию покоя.
+                            return state.setAndContinue(IDLE_WITHOUT_SPEAR);
+                        }));
     }
 
     /**
