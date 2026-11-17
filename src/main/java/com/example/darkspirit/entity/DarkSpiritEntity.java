@@ -13,7 +13,6 @@ import com.geckolib.util.GeckoLibUtil;
 // Minecraft: сущность и полёт.
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
-import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.Enemy;
@@ -46,10 +45,15 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     protected void registerGoals() {
         super.registerGoals();
 
-        // Используем ванильную систему случайного полёта гастов.
+        // Выбираем случайные точки для полёта.
         this.goalSelector.addGoal(
                 5,
                 new Ghast.RandomFloatAroundGoal(this));
+
+        // Поворачиваем тело в направлении движения.
+        this.goalSelector.addGoal(
+                7,
+                new Ghast.GhastLookGoal(this));
     }
 
     /**
@@ -60,8 +64,11 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
             Level level) {
         super(entityType, level);
 
-        // Устанавливаем управление перемещением в воздухе.
-        this.moveControl = new FlyingMoveControl(this, 10, true);
+        // Используем систему плавного перемещения, как у гаста.
+        this.moveControl = new Ghast.GhastMoveControl(
+                this,
+                false,
+                () -> false);
 
         // Отключаем гравитацию.
         this.setNoGravity(true);
@@ -76,18 +83,12 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     }
 
     /**
-     * Используем физику полёта вместо обычного передвижения по земле.
+     * Использует физику полёта Minecraft.
      */
     @Override
     public void travel(Vec3 input) {
-
-        if (this.isEffectiveAi()) {
-            // Перемещение с использованием физики полёта.
-            this.travelFlying(input, 0.02F);
-        } else {
-            // Клиентская сторона использует стандартную обработку движения.
-            super.travel(input);
-        }
+        // Обычное перемещение по земле не используется.
+        this.travelFlying(input, 0.02F);
     }
 
     /**
