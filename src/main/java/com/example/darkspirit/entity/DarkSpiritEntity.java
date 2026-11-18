@@ -3,8 +3,6 @@ package com.example.darkspirit.entity;
 import net.minecraft.world.entity.monster.Ghast;
 import java.util.EnumSet;
 import net.minecraft.world.entity.ai.goal.Goal;
-import com.geckolib.animation.object.LoopType;
-import com.geckolib.animation.object.PlayState;
 import com.example.darkspirit.DarkSpirit;
 
 // GeckoLib 5: анимации сущности.
@@ -48,19 +46,11 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop("fly");
 
     // Анимация броска: проигрывается один раз, без зацикливания.
-    private static final RawAnimation ATTACK = RawAnimation.begin().then("attack", LoopType.PLAY_ONCE);
+    private static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("attack");
 
     // Перезарядка между бросками.
     private int spearCooldownTicks = 0;
 
-    // Задержка до момента вылета копья.
-    private int spearLaunchDelay = -1;
-
-    // Время воспроизведения анимации атаки.
-    private int attackAnimationTicks = 0;
-
-    // Игрок, в сторону которого готовится бросок.
-    private LivingEntity spearTarget;
     // Координаты места, где дух появился.
     private double flightCenterX;
     private double flightCenterY;
@@ -120,87 +110,35 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     @Override
     public void tick() {
 
-        // При первом серверном обновлении запоминаем место появления.
-        if (!this.level().isClientSide() && !this.flightCenterSet) {
-            this.flightCenterX = this.getX();
-            this.flightCenterY = this.getY();
-            this.flightCenterZ = this.getZ();
-
-            this.flightCenterSet = true;
-        }
-
-        // Сервер управляет временем атаки и запуском копья.
-        if (!this.level().isClientSide()) {
-
-            // Уменьшаем время перезарядки.
-            if (this.spearCooldownTicks > 0) {
-                this.spearCooldownTicks--;
-            }
-
-            // Отсчитываем время до броска.
-            if (this.spearLaunchDelay > 0) {
-                this.spearLaunchDelay--;
-
-                // Когда задержка закончилась, запускаем копьё.
-                if (this.spearLaunchDelay == 0) {
-
-                    LivingEntity target = this.spearTarget;
-                    this.spearTarget = null;
-
-                    // Сбрасываем задержку, чтобы разрешить следующие атаки.
-                    this.spearLaunchDelay = -1;
-
-                    DarkSpirit.LOGGER.info("[DarkSpirit] Время броска!");
-
-                    if (target != null && target.isAlive()) {
-                        this.throwSpearAt(target);
-                    }
-                }
-            }
-
-        }
-
-        super.tick();
-
-        // Во время отдыха постепенно гасим скорость движения.
-        if (!this.level().isClientSide() && this.flightPauseTicks > 0) {
-            this.flightPauseTicks--;
-
-            // Плавно уменьшаем скорость, а не останавливаем духа резко.
-            this.setDeltaMovement(
-                    this.getDeltaMovement().scale(0.80D));
+        // Сервер уменьшает перезарядку между бросками.
+        if (!this.level().isClientSide() && this.spearCooldownTicks > 0) {
+            this.spearCooldownTicks--;
         }
     }
 
     /**
-     * Начинает подготовку броска копья.
+     * Начинает атаку и сразу запускает копьё.
      */
     private void startSpearAttack(LivingEntity target) {
 
-        // Атаку запускаем только на сервере.
+        // Атаку выполняет только сервер.
         if (this.level().isClientSide()) {
             return;
         }
 
-        // Проверяем перезарядку и отсутствие другой атаки.
-        if (this.spearCooldownTicks > 0 || this.spearLaunchDelay >= 0) {
+        // Проверяем цель и перезарядку.
+        if (target == null || !target.isAlive() || this.spearCooldownTicks > 0) {
             return;
         }
 
-        // Запоминаем цель.
-        this.spearTarget = target;
-
-        // Копьё вылетит через 28 тиков.
-        this.spearLaunchDelay = 28;
-
-        // Следующий бросок возможен через 4 секунды.
+        // Устанавливаем перезарядку на 4 секунды.
         this.spearCooldownTicks = 80;
 
-        // Запускаем анимацию броска через отдельный контроллер.
-        this.triggerAnim("spear_attack", "throw");
+        // Запускаем анимацию атаки.
+        this.triggerAnim("base", "attack");
 
-        // Временное сообщение для проверки.
-        DarkSpirit.LOGGER.info("[DarkSpirit] Начинаю подготовку броска.");
+        // Создаём и запускаем копьё.
+        this.throwSpearAt(target);
     }
 
     /**
@@ -284,7 +222,7 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     public void registerControllers(
             AnimatableManager.ControllerRegistrar controllers) {
 
-        // Первый контроллер отвечает за полёт и покой.
+        // Основной контроллер отвечает за полёт и покой.
         controllers.add(
                 new AnimationController<>(
                         "base",
@@ -296,15 +234,10 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                             }
 
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        }));
+                        })
 
-        // Второй контроллер отвечает только за бросок копья.
-        controllers.add(
-                new AnimationController<>(
-                        "spear_attack",
-                        0,
-                        state -> PlayState.STOP)
-                        .triggerableAnim("throw", ATTACK));
+                        // Добавляем одноразовую анимацию броска.
+                        .triggerableAnim("attack", ATTACK));
     }
 
     /**
