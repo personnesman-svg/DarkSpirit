@@ -178,16 +178,13 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         }
 
         /**
-         * Проверяем, есть ли живая цель.
+         * Проверяем, есть ли живая цель для преследования.
          */
         @Override
         public boolean canUse() {
+            LivingEntity target = this.spirit.getTarget();
 
-            // Если игрок обнаружен, патрулирование запрещено.
-            return this.spirit.getTarget() == null
-                    && this.spirit.flightCenterSet
-                    && this.spirit.flightPauseTicks <= 0
-                    && !this.spirit.getMoveControl().hasWanted();
+            return target != null && target.isAlive();
         }
 
         /**
@@ -197,7 +194,7 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         public boolean canContinueToUse() {
             LivingEntity target = this.spirit.getTarget();
 
-            return this.spirit.getTarget() == null && distanceSquared > 2.25 && this.flightTicks < 100;
+            return target != null && target.isAlive();
         }
 
         /**
@@ -277,7 +274,10 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
          */
         @Override
         public boolean canUse() {
-            return this.spirit.flightCenterSet
+
+            // Если игрок обнаружен, патрулирование запрещено.
+            return this.spirit.getTarget() == null
+                    && this.spirit.flightCenterSet
                     && this.spirit.flightPauseTicks <= 0
                     && !this.spirit.getMoveControl().hasWanted();
         }
@@ -295,9 +295,11 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
             // Считаем расстояние до точки назначения.
             double distanceSquared = dx * dx + dy * dy + dz * dz;
 
-            // Заканчиваем перелёт, когда приблизились к точке
-            // или если слишком долго не можем до неё добраться.
-            return distanceSquared > 2.25
+            // Прерываем патрулирование, если обнаружили игрока.
+            // Также завершаем перелёт при достижении точки
+            // или по истечении 100 тиков.
+            return this.spirit.getTarget() == null
+                    && distanceSquared > 2.25
                     && this.flightTicks < 100;
         }
 
