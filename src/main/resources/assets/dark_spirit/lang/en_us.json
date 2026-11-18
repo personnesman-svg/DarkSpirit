@@ -9,5 +9,7 @@
   "dark_spirit.configuration.items": "Item List",
   "dark_spirit.configuration.logDirtBlock": "Log Dirt Block",
   "dark_spirit.configuration.magicNumberIntroduction": "Magic Number Text",
-  "dark_spirit.configuration.magicNumber": "Magic Number"
+  "dark_spirit.configuration.magicNumber": "Magic Number",
+  "death.attack.dark_spirit_spear": "%1$s was pierced by the Dark Spirit\u0027s spear",
+  "death.attack.dark_spirit_spear.player": "%1$s was pierced by the Dark Spirit\u0027s spear, thrown by %2$s"
 }
