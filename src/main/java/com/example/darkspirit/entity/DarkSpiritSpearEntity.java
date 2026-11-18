@@ -6,14 +6,25 @@ import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.util.GeckoLibUtil;
 
-// Minecraft: сущности и снаряды.
+// Minecraft: реестр, идентификаторы и тип источника урона.
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageType;
+
+// Minecraft: эффекты, сущности и снаряды.
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.ThrowableProjectile;
 import net.minecraft.world.level.Level;
 
-// Minecraft: столкновение с блоком и вектор движения.
+// Minecraft: столкновения и вектор движения.
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 // Minecraft: данные сущности.
@@ -21,9 +32,8 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
-// Minecraft: обработка урона.
+// Minecraft: серверная обработка урона.
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.damagesource.DamageSource;
 
 /**
  * Отдельная сущность копья Духа тьмы.
@@ -38,6 +48,18 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
 
     // Показывает, застряло ли копьё в блоке.
     private boolean stuckInBlock = false;
+
+    // Отдельный тип урона копья, который не блокируется щитом.
+    private static final ResourceKey<DamageType> SPEAR_DAMAGE_TYPE =
+            ResourceKey.create(
+                    Registries.DAMAGE_TYPE,
+                    Identifier.fromNamespaceAndPath("dark_spirit", "dark_spirit_spear"));
+
+    // Четыре сердца равны восьми единицам здоровья.
+    private static final float SPEAR_DAMAGE = 8.0F;
+
+    // Продолжительность Иссушения: 5 секунд.
+    private static final int WITHER_DURATION_TICKS = 100;
 
     /**
      * Создаёт копьё.
@@ -155,12 +177,56 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
     }
 
     /**
-     * Пока запрещаем столкновения с другими сущностями.
-     * Позже разрешим попадание только по игрокам.
+     * Копьё сталкивается только с игроками.
+     *
+     * Другие существа не считаются целью и не останавливают снаряд.
      */
     @Override
     protected boolean canHitEntity(Entity entity) {
-        return false;
+        return entity instanceof Player && super.canHitEntity(entity);
+    }
+
+    /**
+     * Наносим урон игроку и накладываем Иссушение.
+     */
+    @Override
+    protected void onHitEntity(EntityHitResult hitResult) {
+
+        // Урон и эффекты рассчитываются только на сервере.
+        if (this.level().isClientSide()) {
+            return;
+        }
+
+        if (hitResult.getEntity() instanceof Player player) {
+
+            // Сохраняем владельца, чтобы урон был приписан Духу тьмы.
+            Entity owner = this.getOwner();
+
+            // Создаём отдельный источник урона копья.
+            // Его тип помечен как проходящий сквозь щиты.
+            DamageSource damageSource = this.damageSources().source(
+                    SPEAR_DAMAGE_TYPE,
+                    this,
+                    owner);
+
+            // Наносим восемь единиц урона — четыре сердца.
+            boolean damageApplied = player.hurt(
+                    damageSource,
+                    SPEAR_DAMAGE);
+
+            // Накладываем Иссушение только при успешном попадании.
+            if (damageApplied) {
+                player.addEffect(
+                        new MobEffectInstance(
+                                MobEffects.WITHER,
+                                WITHER_DURATION_TICKS,
+                                0),
+                        owner);
+            }
+        }
+
+        // После попадания в игрока копьё исчезает.
+        this.discard();
     }
 
     /**
@@ -208,7 +274,7 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
     }
 
     /**
-     * Возвращает хранилище GeckoLib.
+     * Возвращает хранилище анимаций GeckoLib.
      */
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
