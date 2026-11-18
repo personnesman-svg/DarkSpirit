@@ -1,7 +1,9 @@
 package com.example.darkspirit.client.model;
 
-// GeckoLib: базовые классы для 3D-модели.
+// Сущность нашего копья.
 import com.example.darkspirit.entity.DarkSpiritSpearEntity;
+
+// GeckoLib: базовые классы модели.
 import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.base.GeoRenderState;
 
@@ -9,10 +11,7 @@ import com.geckolib.renderer.base.GeoRenderState;
 import net.minecraft.resources.Identifier;
 
 /**
- * Описывает модель и текстуру копья Духа тьмы.
- *
- * T — тип объекта GeckoLib, который будет использовать эту модель.
- * Позже здесь укажем нашу сущность копья.
+ * Описывает геометрию, текстуру и анимации копья.
  */
 public class DarkSpiritSpearModel extends GeoModel<DarkSpiritSpearEntity> {
 
@@ -26,7 +25,7 @@ public class DarkSpiritSpearModel extends GeoModel<DarkSpiritSpearEntity> {
             "dark_spirit",
             "textures/entity/dark_spirit_spear.png");
 
-    // Используем существующий файл анимаций Духа тьмы.
+    // Используем общий файл анимаций Духа тьмы.
     private static final Identifier ANIMATIONS = Identifier.fromNamespaceAndPath(
             "dark_spirit",
             "entity/dark_spirit");
@@ -34,8 +33,9 @@ public class DarkSpiritSpearModel extends GeoModel<DarkSpiritSpearEntity> {
     /**
      * Возвращает геометрию копья.
      */
-    public Identifier getAnimationResource(DarkSpiritSpearEntity animatable) {
-        return ANIMATIONS;
+    @Override
+    public Identifier getModelResource(GeoRenderState renderState) {
+        return MODEL;
     }
 
     /**
@@ -47,10 +47,10 @@ public class DarkSpiritSpearModel extends GeoModel<DarkSpiritSpearEntity> {
     }
 
     /**
-     * Возвращает файл анимаций.
+     * Возвращает общий файл анимаций.
      */
     @Override
-    public Identifier getAnimationResource(T animatable) {
+    public Identifier getAnimationResource(DarkSpiritSpearEntity animatable) {
         return ANIMATIONS;
     }
 }

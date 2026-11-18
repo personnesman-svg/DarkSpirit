@@ -34,20 +34,28 @@ public class DarkSpiritClient {
     }
 
     /**
-     * Регистрирует способ отображения Духа тьмы в игре.
+     * Регистрирует способы отображения сущностей нашего мода.
      */
     @SubscribeEvent
     static void registerEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
 
-        // Подключаем собственную модель Духа тьмы.
+        // Подключаем модель Духа тьмы.
         event.registerEntityRenderer(
                 ModEntities.DARK_SPIRIT.get(),
                 context -> new GeoEntityRenderer<>(
                         context,
                         new DarkSpiritModel()));
+
+        // Подключаем модель летящего копья.
+        event.registerEntityRenderer(
+                ModEntities.DARK_SPIRIT_SPEAR.get(),
+                context -> new GeoEntityRenderer<>(
+                        context,
+                        new DarkSpiritSpearModel()));
+        // Подключаем собственную модель летящего копья.
+        event.registerEntityRenderer(ModEntities.DARK_SPIRIT_SPEAR.get(),
+                context -> new GeoEntityRenderer<>(context, new DarkSpiritSpearModel()));
     }
-    // Подключаем собственную модель летящего копья.
-    event.registerEntityRenderer(ModEntities.DARK_SPIRIT_SPEAR.get(),context->new GeoEntityRenderer<>(context,new DarkSpiritSpearModel()));
 
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
