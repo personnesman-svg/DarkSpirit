@@ -197,9 +197,6 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
             // Останавливаем инерцию, чтобы Дух не пролетел дальше после телепортации.
             spirit.setDeltaMovement(Vec3.ZERO);
 
-            // Сообщаем Minecraft, что положение сущности резко изменилось.
-            spirit.hasImpulse = true;
-
             // Восстанавливаем 8 единиц здоровья — четыре сердца.
             // Метод heal сам ограничивает здоровье максимальным значением.
             spirit.heal(8.0F);
