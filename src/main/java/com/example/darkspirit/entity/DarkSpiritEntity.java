@@ -10,6 +10,7 @@ import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
+import com.geckolib.animation.PlayState;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
 
@@ -48,8 +49,16 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     // Анимация броска: проигрывается один раз, без зацикливания.
     private static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("attack");
 
-    // Перезарядка между бросками.
+    // Перезарядка между бросками копья.
     private int spearCooldownTicks = 0;
+
+    // Сколько тиков осталось до вылета копья после начала анимации атаки.
+    // Значение -1 означает, что бросок сейчас не подготовлен.
+    private int spearLaunchDelayTicks = -1;
+
+    // Цель, которую Дух выбрал для текущего броска.
+    // Поле используется только на сервере.
+    private LivingEntity pendingSpearTarget;
 
     // Координаты места, где дух появился.
     private double flightCenterX;
@@ -120,17 +129,55 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
             this.flightCenterSet = true;
         }
 
-        // КРИТИЧЕСКИ ВАЖНО:
-        // Выполняем штатное обновление Minecraft.
-        // Здесь обновляются ИИ, цели, контроллер движения, навигация и физика моба.
+        // Обязательно обновляем стандартную логику Minecraft:
+        // ИИ, выбранную цель, GoalSelector, MoveControl и физику сущности.
         super.tick();
 
-        // Таймеры нашего мода изменяем только на сервере.
+        // Боевой ИИ и создание снарядов выполняются только на сервере.
         if (!this.level().isClientSide()) {
 
-            // Уменьшаем перезарядку между бросками копья.
+            // Уменьшаем перезарядку между атаками.
             if (this.spearCooldownTicks > 0) {
                 this.spearCooldownTicks--;
+            }
+
+            // Обрабатываем задержку между анимацией замаха и вылетом копья.
+            if (this.spearLaunchDelayTicks > 0) {
+                this.spearLaunchDelayTicks--;
+
+                // Когда задержка закончилась, запускаем копьё.
+                if (this.spearLaunchDelayTicks == 0) {
+                    LivingEntity target = this.pendingSpearTarget;
+
+                    // Сбрасываем подготовленный бросок до создания снаряда.
+                    this.pendingSpearTarget = null;
+                    this.spearLaunchDelayTicks = -1;
+
+                    // Если цель ещё жива, выполняем бросок.
+                    if (target != null && target.isAlive()) {
+                        this.throwSpearAt(target);
+                    }
+                }
+            }
+
+            // Атаку проверяем здесь, а не внутри ChasePlayerGoal.
+            // Так запуск броска не зависит от частоты обновления GoalSelector.
+            LivingEntity target = this.getTarget();
+
+            if (target != null
+                    && target.isAlive()
+                    && this.spearCooldownTicks <= 0
+                    && this.spearLaunchDelayTicks < 0) {
+
+                // Для дистанции атаки учитываем только горизонтальную плоскость.
+                double dx = target.getX() - this.getX();
+                double dz = target.getZ() - this.getZ();
+                double horizontalDistanceSquared = dx * dx + dz * dz;
+
+                // Начинаем атаку, когда игрок находится не дальше 7 блоков.
+                if (horizontalDistanceSquared <= 49.0D) {
+                    this.startSpearAttack(target);
+                }
             }
 
             // После завершения патрульного перелёта постепенно гасим скорость.
@@ -145,28 +192,42 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     }
 
     /**
-     * Начинает атаку и сразу запускает копьё.
+     * Начинает подготовку броска копья.
+     *
+     * Этот метод вызывается из серверного tick() сущности,
+     * поэтому он не зависит от обновления отдельной AI-цели.
      */
     private void startSpearAttack(LivingEntity target) {
 
-        // Атаку выполняет только сервер.
+        // Атаковать можно только на сервере.
         if (this.level().isClientSide()) {
             return;
         }
 
-        // Проверяем цель и перезарядку.
-        if (target == null || !target.isAlive() || this.spearCooldownTicks > 0) {
+        // Не начинаем атаку без живой цели или во время перезарядки.
+        if (target == null
+                || !target.isAlive()
+                || this.spearCooldownTicks > 0
+                || this.spearLaunchDelayTicks >= 0) {
             return;
         }
 
-        // Устанавливаем перезарядку на 4 секунды.
-        this.spearCooldownTicks = 80;
+        // Запоминаем цель до момента фактического броска.
+        this.pendingSpearTarget = target;
 
-        // Запускаем анимацию атаки.
-        this.triggerAnim("base", "attack");
+        // Запускаем 5-секундную перезарядку.
+        this.spearCooldownTicks = 100;
 
-        // Создаём и запускаем копьё.
-        this.throwSpearAt(target);
+        // Копьё вылетит через 28 тиков (примерно 1,4 секунды).
+        this.spearLaunchDelayTicks = 28;
+
+        // Запускаем отдельную одноразовую анимацию броска GeckoLib.
+        this.triggerAnim("spear_attack", "throw");
+
+        // Диагностическое сообщение появляется только один раз за атаку.
+        DarkSpirit.LOGGER.info(
+                "[DarkSpirit] Начал подготовку броска в сторону {}",
+                target.getName().getString());
     }
 
     /**
@@ -217,13 +278,19 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         // Запускаем копьё со скоростью 1,1 блока за тик.
         spear.launch(this, direction, 1.1F);
 
-        // Добавляем копьё в игровой мир.
+        // Добавляем снаряд в мир с сервера.
         boolean added = this.level().addFreshEntity(spear);
 
-        // Временно проверяем результат добавления.
-        DarkSpirit.LOGGER.info(
-                "[DarkSpirit] Копьё добавлено в мир: {}",
-                added);
+        // Если сервер отказался добавить копьё, оставляем понятную причину в логе.
+        if (added) {
+            DarkSpirit.LOGGER.info(
+                    "[DarkSpirit] Копьё создано: скорость={}, позиция={}",
+                    spear.getDeltaMovement(),
+                    spear.position());
+        } else {
+            DarkSpirit.LOGGER.error(
+                    "[DarkSpirit] Minecraft отказался добавить сущность копья в мир.");
+        }
     }
 
     /**
@@ -250,7 +317,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     public void registerControllers(
             AnimatableManager.ControllerRegistrar controllers) {
 
-        // Основной контроллер отвечает за полёт и покой.
+        // Основной контроллер отвечает только за постоянные состояния:
+        // полёт и покой.
         controllers.add(
                 new AnimationController<>(
                         "base",
@@ -262,10 +330,17 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                             }
 
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        })
+                        }));
 
-                        // Добавляем одноразовую анимацию броска.
-                        .triggerableAnim("attack", ATTACK));
+        // Отдельный контроллер отвечает только за одноразовый бросок.
+        // PlayState.STOP означает, что сам по себе он ничего не проигрывает.
+        // Анимация запускается только вызовом triggerAnim("spear_attack", "throw").
+        controllers.add(
+                new AnimationController<>(
+                        "spear_attack",
+                        0,
+                        state -> PlayState.STOP)
+                        .triggerableAnim("throw", ATTACK));
     }
 
     /**
@@ -347,11 +422,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                         this.spirit.getDeltaMovement().scale(0.65D));
             }
 
-            // Начинаем подготовку атаки в пределах 7 блоков.
-            // Проверка не зависит от высоты полёта Духа.
-            if (horizontalDistanceSquared <= 49.0D) {
-                this.spirit.startSpearAttack(target);
-            }
+            // Атака проверяется отдельно в DarkSpiritEntity.tick().
+            // Здесь Goal отвечает только за преследование и остановку перед игроком.
         }
 
         /**
