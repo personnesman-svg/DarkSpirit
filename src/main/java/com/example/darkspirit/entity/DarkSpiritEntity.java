@@ -14,6 +14,7 @@ import com.geckolib.util.GeckoLibUtil;
 
 // Minecraft: сущность и полёт.
 import net.minecraft.world.entity.EntityType;
+import com.example.darkspirit.ModEntities;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -42,6 +43,21 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     private static final RawAnimation IDLE_WITHOUT_SPEAR = RawAnimation.begin().thenLoop("idle2");
     // Анимация движения в воздухе.
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop("fly");
+
+    // Одноразовая анимация броска копья.
+    private static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("attack");
+
+    // Перезарядка между бросками.
+    private int spearCooldownTicks = 0;
+
+    // Задержка до момента вылета копья.
+    private int spearLaunchDelay = -1;
+
+    // Время воспроизведения анимации атаки.
+    private int attackAnimationTicks = 0;
+
+    // Игрок, в сторону которого готовится бросок.
+    private LivingEntity spearTarget;
     // Координаты места, где дух появился.
     private double flightCenterX;
     private double flightCenterY;
@@ -110,6 +126,40 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
             this.flightCenterSet = true;
         }
 
+        // Сервер управляет временем атаки и запуском копья.
+        if (!this.level().isClientSide()) {
+
+            // Уменьшаем время перезарядки.
+            if (this.spearCooldownTicks > 0) {
+                this.spearCooldownTicks--;
+            }
+
+            // Отсчитываем время до броска.
+            if (this.spearLaunchDelay > 0) {
+                this.spearLaunchDelay--;
+
+                // Когда задержка закончилась, запускаем копьё.
+                if (this.spearLaunchDelay == 0) {
+
+                    LivingEntity target = this.spearTarget;
+                    this.spearTarget = null;
+
+                    if (target != null && target.isAlive()) {
+                        this.throwSpearAt(target);
+                    }
+                }
+            }
+
+            // Завершаем одноразовую анимацию атаки.
+            if (this.attackAnimationTicks > 0) {
+                this.attackAnimationTicks--;
+
+                if (this.attackAnimationTicks == 0) {
+                    this.stopTriggeredAnim("base", "attack");
+                }
+            }
+        }
+
         super.tick();
 
         // Во время отдыха постепенно гасим скорость движения.
@@ -120,6 +170,89 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
             this.setDeltaMovement(
                     this.getDeltaMovement().scale(0.80D));
         }
+    }
+
+    /**
+     * Начинает подготовку броска копья.
+     */
+    private void startSpearAttack(LivingEntity target) {
+
+        // Атаку запускаем только на сервере.
+        if (this.level().isClientSide()) {
+            return;
+        }
+
+        // Проверяем перезарядку и отсутствие другой атаки.
+        if (this.spearCooldownTicks > 0 || this.spearLaunchDelay >= 0) {
+            return;
+        }
+
+        // Запоминаем цель.
+        this.spearTarget = target;
+
+        // Копьё вылетит через 28 тиков.
+        this.spearLaunchDelay = 28;
+
+        // Следующий бросок возможен через 4 секунды.
+        this.spearCooldownTicks = 80;
+
+        // Анимация длится 2,5 секунды.
+        this.attackAnimationTicks = 50;
+
+        // Отправляем команду GeckoLib воспроизвести атаку.
+        this.triggerAnim("base", "attack");
+    }
+
+    /**
+     * Создаёт и запускает копьё в сторону цели.
+     */
+    private void throwSpearAt(LivingEntity target) {
+
+        if (this.level().isClientSide() || !target.isAlive()) {
+            return;
+        }
+
+        // Примерное положение руки Духа.
+        Vec3 origin = this.position().add(
+                0.0D,
+                this.getBbHeight() * 0.65D,
+                0.0D);
+
+        // Целимся в середину тела игрока.
+        Vec3 targetPosition = target.position().add(
+                0.0D,
+                target.getBbHeight() * 0.5D,
+                0.0D);
+
+        // Вычисляем направление полёта.
+        Vec3 direction = targetPosition.subtract(origin);
+
+        if (direction.lengthSqr() < 1.0E-7D) {
+            return;
+        }
+
+        // Получаем нормализованное направление.
+        Vec3 normalizedDirection = direction.normalize();
+
+        // Создаём новую сущность копья.
+        DarkSpiritSpearEntity spear = new DarkSpiritSpearEntity(
+                ModEntities.DARK_SPIRIT_SPEAR.get(),
+                this.level());
+
+        // Выносим копьё немного вперёд от Духа.
+        Vec3 spawnPosition = origin.add(
+                normalizedDirection.scale(0.8D));
+
+        spear.setPos(
+                spawnPosition.x,
+                spawnPosition.y,
+                spawnPosition.z);
+
+        // Запускаем копьё со скоростью 1,1 блока за тик.
+        spear.launch(this, direction, 1.1F);
+
+        // Добавляем копьё в игровой мир.
+        this.level().addFreshEntity(spear);
     }
 
     /**
@@ -151,14 +284,16 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                         5,
                         state -> {
 
-                            // Если дух движется, включаем анимацию полёта.
+                            // Если Дух движется, воспроизводим полёт.
                             if (state.isMoving()) {
                                 return state.setAndContinue(FLY);
                             }
 
-                            // Если дух остановился, включаем анимацию покоя.
+                            // Если Дух стоит, воспроизводим покой.
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        }));
+                        })
+                        // Регистрируем одноразовую анимацию атаки.
+                        .triggerableAnim("attack", ATTACK));
     }
 
     /**
@@ -231,7 +366,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
 
                 // Если приблизились — прекращаем движение.
                 this.spirit.getMoveControl().setWait();
-
+                // Если игрок рядом, начинаем подготовку броска.
+                this.spirit.startSpearAttack(target);
                 // Плавно гасим оставшуюся скорость.
                 this.spirit.setDeltaMovement(
                         this.spirit.getDeltaMovement().scale(0.65D));
