@@ -210,19 +210,18 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
                     owner);
 
             // Наносим восемь единиц урона — четыре сердца.
-            boolean damageApplied = player.hurt(
+            // В Minecraft 26.1.2 метод hurt ничего не возвращает.
+            player.hurt(
                     damageSource,
                     SPEAR_DAMAGE);
 
-            // Накладываем Иссушение только при успешном попадании.
-            if (damageApplied) {
-                player.addEffect(
-                        new MobEffectInstance(
-                                MobEffects.WITHER,
-                                WITHER_DURATION_TICKS,
-                                0),
-                        owner);
-            }
+            // Копьё уже столкнулось с игроком, поэтому накладываем Иссушение.
+            player.addEffect(
+                    new MobEffectInstance(
+                            MobEffects.WITHER,
+                            WITHER_DURATION_TICKS,
+                            0),
+                    owner);
         }
 
         // После попадания в игрока копьё исчезает.
