@@ -52,9 +52,6 @@ public class DarkSpiritClient {
                 context -> new GeoEntityRenderer<>(
                         context,
                         new DarkSpiritSpearModel()));
-        // Подключаем собственную модель летящего копья.
-        event.registerEntityRenderer(ModEntities.DARK_SPIRIT_SPEAR.get(),
-                context -> new GeoEntityRenderer<>(context, new DarkSpiritSpearModel()));
     }
 
     @SubscribeEvent
