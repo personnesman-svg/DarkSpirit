@@ -130,8 +130,16 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
             // Поиск не зависит от NearestAttackableTargetGoal и игрового режима.
             Player nearestPlayer = this.findNearestPlayer();
 
-            // Назначаем игрока целью для существующей логики преследования.
-            this.setTarget(nearestPlayer);
+            // Обновляем цель только при её фактической смене.
+            // Это не даёт ИИ лишний раз сбрасывать текущее состояние цели.
+            if (this.getTarget() != nearestPlayer) {
+                this.setTarget(nearestPlayer);
+            }
+
+            // Поворачиваем голову и корпус прямо к игроку.
+            if (nearestPlayer != null) {
+                this.facePlayer(nearestPlayer);
+            }
 
             // Самый простой тестовый боевой цикл:
             // если игрок найден, сразу выпускаем копьё в его сторону.
@@ -159,6 +167,28 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                         this.getDeltaMovement().scale(0.80D));
             }
         }
+    }
+
+    /**
+     * Поворачивает голову и корпус Духа к указанному игроку.
+     */
+    private void facePlayer(Player target) {
+
+        // Вычисляем направление от Духа к игроку по горизонтали.
+        double dx = target.getX() - this.getX();
+        double dz = target.getZ() - this.getZ();
+
+        // Преобразуем направление в угол Minecraft.
+        // Нулевой угол соответствует взгляду вдоль положительной оси Z.
+        float yaw = (float) (Math.atan2(dz, dx) * 180.0D / Math.PI) - 90.0F;
+
+        // Сразу поворачиваем корпус и голову в сторону игрока.
+        this.setYRot(yaw);
+        this.setYBodyRot(yaw);
+        this.setYHeadRot(yaw);
+
+        // Оставляем LookControl активным для дальнейшей плавной работы ИИ.
+        this.getLookControl().setLookAt(target, 180.0F, 180.0F);
     }
 
     /**
@@ -249,11 +279,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         spear.setDeltaMovement(velocity);
 
         // Поворачиваем снаряд по направлению движения.
-        spear.setYRot((float) (Math.atan2(velocity.z, velocity.x) * 180.0D / Math.PI) + 90.0F);
-        spear.setXRot((float) (Math.atan2(
-                velocity.y,
-                Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z))
-                * 180.0D / Math.PI));
+        // Поворачиваем копьё носом по направлению скорости.
+        spear.alignToVelocity();
 
         // Добавляем снаряд в мир.
         boolean added = this.level().addFreshEntity(spear);
