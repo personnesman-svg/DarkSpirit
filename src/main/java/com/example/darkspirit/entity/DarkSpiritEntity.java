@@ -10,7 +10,6 @@ import com.geckolib.animatable.GeoEntity;
 import com.geckolib.animatable.instance.AnimatableInstanceCache;
 import com.geckolib.animatable.manager.AnimatableManager;
 import com.geckolib.animation.AnimationController;
-import com.geckolib.animation.PlayState;
 import com.geckolib.animation.RawAnimation;
 import com.geckolib.util.GeckoLibUtil;
 
@@ -222,7 +221,7 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         this.spearLaunchDelayTicks = 28;
 
         // Запускаем отдельную одноразовую анимацию броска GeckoLib.
-        this.triggerAnim("spear_attack", "throw");
+        this.triggerAnim("base", "attack");
 
         // Диагностическое сообщение появляется только один раз за атаку.
         DarkSpirit.LOGGER.info(
@@ -317,8 +316,10 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     public void registerControllers(
             AnimatableManager.ControllerRegistrar controllers) {
 
-        // Основной контроллер отвечает только за постоянные состояния:
-        // полёт и покой.
+        // Основной контроллер выбирает постоянную анимацию:
+        // полёт или покой.
+        // Анимация атаки зарегистрирована на этом же контроллере,
+        // потому что она задействует всё тело и должна временно заменить idle/fly.
         controllers.add(
                 new AnimationController<>(
                         "base",
@@ -330,17 +331,10 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                             }
 
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        }));
-
-        // Отдельный контроллер отвечает только за одноразовый бросок.
-        // PlayState.STOP означает, что сам по себе он ничего не проигрывает.
-        // Анимация запускается только вызовом triggerAnim("spear_attack", "throw").
-        controllers.add(
-                new AnimationController<>(
-                        "spear_attack",
-                        0,
-                        state -> PlayState.STOP)
-                        .triggerableAnim("throw", ATTACK));
+                        })
+                        // Одноразовая анимация броска. При вызове triggerAnim
+                        // GeckoLib временно проигрывает её вместо обычного состояния.
+                        .triggerableAnim("attack", ATTACK));
     }
 
     /**
