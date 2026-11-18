@@ -1,6 +1,7 @@
 package com.example.darkspirit;
 
 import com.example.darkspirit.entity.DarkSpiritEntity;
+import com.example.darkspirit.entity.DarkSpiritSpearEntity;
 
 import java.util.function.Supplier;
 
@@ -24,6 +25,21 @@ public final class ModEntities {
                         "dark_spirit",
                         DarkSpiritEntity::new,
                         MobCategory.MONSTER);
+        // Регистрируем отдельную сущность летящего копья.
+        public static final Supplier<EntityType<DarkSpiritSpearEntity>> DARK_SPIRIT_SPEAR = ENTITY_TYPES
+                        .registerEntityType(
+                                        "dark_spirit_spear",
+                                        DarkSpiritSpearEntity::new,
+                                        MobCategory.MISC,
+                                        builder -> builder
+                                                        // Небольшой размер столкновения копья.
+                                                        .sized(0.35F, 0.35F)
+
+                                                        // Дальность отслеживания копья клиентом.
+                                                        .clientTrackingRange(8)
+
+                                                        // Частота синхронизации движения.
+                                                        .updateInterval(1));
 
         /**
          * Регистрирует базовые характеристики Духа тьмы.
