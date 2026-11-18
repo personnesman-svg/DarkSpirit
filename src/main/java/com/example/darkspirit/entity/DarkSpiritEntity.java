@@ -43,6 +43,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     private static final RawAnimation IDLE_WITHOUT_SPEAR = RawAnimation.begin().thenLoop("idle2");
     // Анимация движения в воздухе.
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop("fly");
+    // Однократная анимация появления Духа после телепортации.
+    private static final RawAnimation TELEPORT = RawAnimation.begin().thenPlay("teleport");
 
     // Радиус поиска ближайшего игрока.
     private static final double PLAYER_DETECTION_RANGE = 24.0D;
@@ -192,6 +194,18 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     }
 
     /**
+     * Запускает анимацию телепортации Духа.
+     *
+     * Событие отправляется с сервера, чтобы GeckoLib синхронизировал
+     * запуск анимации с клиентами, которые видят эту сущность.
+     */
+    public void playTeleportAnimation() {
+        if (!this.level().isClientSide()) {
+            this.triggerAnim("base", "teleport");
+        }
+    }
+
+    /**
      * Ищет ближайшего живого игрока в радиусе обнаружения.
      *
      * В отличие от NearestAttackableTargetGoal, этот метод временно
@@ -337,7 +351,9 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                             }
 
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        }));
+                        })
+                        // Позволяем временно заменить полёт или покой анимацией телепортации.
+                        .triggerableAnim("teleport", TELEPORT));
     }
 
     /**
