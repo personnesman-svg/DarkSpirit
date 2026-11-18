@@ -176,20 +176,32 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
      */
     private void facePlayer(Player target) {
 
-        // Вычисляем направление от Духа к игроку по горизонтали.
+        // Вычисляем горизонтальное направление от Духа к игроку.
         double dx = target.getX() - this.getX();
         double dz = target.getZ() - this.getZ();
 
-        // Преобразуем направление в угол Minecraft.
+        // Вычисляем вертикальную разницу между глазами Духа и игрока.
+        double dy = target.getEyeY() - this.getEyeY();
+
+        // Горизонтальное расстояние нужно для расчёта вертикального угла.
+        double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+
+        // Преобразуем направление по горизонтали в угол Minecraft.
         // Нулевой угол соответствует взгляду вдоль положительной оси Z.
         float yaw = (float) (Math.atan2(dz, dx) * 180.0D / Math.PI) - 90.0F;
 
-        // Сразу поворачиваем корпус и голову в сторону игрока.
+        // Рассчитываем наклон вверх или вниз к глазам игрока.
+        // В Minecraft отрицательный pitch означает взгляд вверх.
+        float pitch = (float) (
+                -Math.atan2(dy, horizontalDistance) * 180.0D / Math.PI);
+
+        // Поворачиваем корпус, голову и вертикальный угол взгляда к игроку.
         this.setYRot(yaw);
         this.setYBodyRot(yaw);
         this.setYHeadRot(yaw);
+        this.setXRot(pitch);
 
-        // Оставляем LookControl активным для дальнейшей плавной работы ИИ.
+        // Оставляем LookControl активным для дальнейшей работы ИИ.
         this.getLookControl().setLookAt(target, 180.0F, 180.0F);
     }
 
@@ -410,18 +422,30 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                     30.0F,
                     30.0F);
 
-            // Вычисляем горизонтальное расстояние до игрока.
+            // Вычисляем разницу по горизонтали между Духом и игроком.
             double dx = target.getX() - this.spirit.getX();
             double dz = target.getZ() - this.spirit.getZ();
 
-            double horizontalDistanceSquared = dx * dx + dz * dz;
+            // Сравниваем высоту центров сущностей, а не только их координаты ног.
+            double spiritCenterY = this.spirit.getY()
+                    + this.spirit.getBbHeight() * 0.5D;
+            double targetCenterY = target.getY()
+                    + target.getBbHeight() * 0.5D;
+            double dy = targetCenterY - spiritCenterY;
 
-            // Если игрок дальше 6 блоков по горизонтали — приближаемся.
-            if (horizontalDistanceSquared > 36.0D) {
+            // Полное трёхмерное расстояние учитывает и высоту игрока.
+            double distanceSquared = dx * dx + dy * dy + dz * dz;
+
+            // Если игрок дальше 6 блоков в любом направлении — продолжаем сближение.
+            if (distanceSquared > 36.0D) {
+
+                // Выбираем высоту, при которой центры Духа и игрока совпадут.
+                double wantedY = target.getY()
+                        + (target.getBbHeight() - this.spirit.getBbHeight()) * 0.5D;
 
                 this.spirit.getMoveControl().setWantedPosition(
                         target.getX(),
-                        target.getY() + 1.0D,
+                        wantedY,
                         target.getZ(),
                         0.55D);
 
