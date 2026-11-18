@@ -24,7 +24,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 
 /**
  * Основной класс существа «Дух тьмы».
@@ -47,6 +46,12 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
 
     // Анимация броска: проигрывается один раз, без зацикливания.
     private static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("attack");
+
+    // Радиус, в котором Дух замечает игроков.
+    private static final double PLAYER_DETECTION_RANGE = 24.0D;
+
+    // Радиус начала броска копья по горизонтали.
+    private static final double SPEAR_ATTACK_RANGE = 7.0D;
 
     // Перезарядка между бросками копья.
     private int spearCooldownTicks = 0;
@@ -72,14 +77,6 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     @Override
     protected void registerGoals() {
         super.registerGoals();
-
-        // Приоритет 1: ищем ближайшего игрока.
-        this.targetSelector.addGoal(
-                1,
-                new NearestAttackableTargetGoal<>(
-                        this,
-                        Player.class,
-                        false));
 
         // Приоритет 2: преследуем найденного игрока.
         this.goalSelector.addGoal(
@@ -135,6 +132,29 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         // Боевой ИИ и создание снарядов выполняются только на сервере.
         if (!this.level().isClientSide()) {
 
+            // Находим ближайшего живого игрока самостоятельно.
+            // Это не использует ванильные боевые фильтры TargetingConditions,
+            // которые не выбирают игроков в творческом режиме.
+            LivingEntity previousTarget = this.getTarget();
+            Player nearestPlayer = this.findNearestPlayer();
+
+            // Устанавливаем ближайшего игрока целью.
+            // Наблюдателей не выбираем, творческий режим для тестирования разрешён.
+            this.setTarget(nearestPlayer);
+
+            // Записываем в лог только смену цели, а не каждую игровую итерацию.
+            if (nearestPlayer != previousTarget) {
+                if (nearestPlayer != null) {
+                    DarkSpirit.LOGGER.info(
+                            "[DarkSpirit] Цель обнаружена: {}, расстояние={}",
+                            nearestPlayer.getName().getString(),
+                            this.distanceTo(nearestPlayer));
+                } else if (previousTarget != null) {
+                    DarkSpirit.LOGGER.info(
+                            "[DarkSpirit] Игрок вышел из радиуса обнаружения.");
+                }
+            }
+
             // Уменьшаем перезарядку между атаками.
             if (this.spearCooldownTicks > 0) {
                 this.spearCooldownTicks--;
@@ -173,8 +193,9 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                 double dz = target.getZ() - this.getZ();
                 double horizontalDistanceSquared = dx * dx + dz * dz;
 
-                // Начинаем атаку, когда игрок находится не дальше 7 блоков.
-                if (horizontalDistanceSquared <= 49.0D) {
+                // Начинаем атаку, когда игрок находится в заданном радиусе.
+                if (horizontalDistanceSquared
+                        <= SPEAR_ATTACK_RANGE * SPEAR_ATTACK_RANGE) {
                     this.startSpearAttack(target);
                 }
             }
@@ -188,6 +209,39 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                         this.getDeltaMovement().scale(0.80D));
             }
         }
+    }
+
+    /**
+     * Ищет ближайшего живого игрока в радиусе обнаружения.
+     *
+     * В отличие от NearestAttackableTargetGoal, этот метод временно
+     * разрешает обнаружение игроков в творческом режиме.
+     * Это упрощает проверку атаки во время разработки мода.
+     */
+    private Player findNearestPlayer() {
+
+        Player nearestPlayer = null;
+
+        // Изначально считаем, что игрока ближе радиуса обнаружения нет.
+        double nearestDistanceSquared =
+                PLAYER_DETECTION_RANGE * PLAYER_DETECTION_RANGE;
+
+        // Проверяем игроков в области вокруг Духа.
+        for (Player player : this.level().getEntitiesOfClass(
+                Player.class,
+                this.getBoundingBox().inflate(PLAYER_DETECTION_RANGE),
+                candidate -> candidate.isAlive() && !candidate.isSpectator())) {
+
+            // Сравниваем расстояние до текущего кандидата.
+            double distanceSquared = this.distanceToSqr(player);
+
+            if (distanceSquared < nearestDistanceSquared) {
+                nearestDistanceSquared = distanceSquared;
+                nearestPlayer = player;
+            }
+        }
+
+        return nearestPlayer;
     }
 
     /**
