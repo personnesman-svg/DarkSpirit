@@ -174,6 +174,36 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
 
         // Запоминаем, что копьё застряло.
         this.stuckInBlock = true;
+
+        // Телепортация и лечение выполняются только на сервере.
+        if (!this.level().isClientSide()
+                && this.getOwner() instanceof DarkSpiritEntity spirit) {
+
+            // Получаем нормаль грани блока, в которую попало копьё.
+            // Она позволяет поставить Духа снаружи блока, а не внутри него.
+            Vec3 faceOffset = new Vec3(
+                    hitResult.getDirection().getStepX(),
+                    hitResult.getDirection().getStepY(),
+                    hitResult.getDirection().getStepZ())
+                    .scale(0.75D);
+
+            // Переносим Духа к месту попадания копья.
+            Vec3 teleportPosition = hitResult.getLocation().add(faceOffset);
+            spirit.setPos(
+                    teleportPosition.x,
+                    teleportPosition.y,
+                    teleportPosition.z);
+
+            // Останавливаем инерцию, чтобы Дух не пролетел дальше после телепортации.
+            spirit.setDeltaMovement(Vec3.ZERO);
+
+            // Сообщаем Minecraft, что положение сущности резко изменилось.
+            spirit.hasImpulse = true;
+
+            // Восстанавливаем 8 единиц здоровья — четыре сердца.
+            // Метод heal сам ограничивает здоровье максимальным значением.
+            spirit.heal(8.0F);
+        }
     }
 
     /**
