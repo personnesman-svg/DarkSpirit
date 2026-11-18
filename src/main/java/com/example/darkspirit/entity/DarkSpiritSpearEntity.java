@@ -72,13 +72,9 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
         // Нормализуем направление.
         Vec3 normalizedDirection = direction.normalize();
 
-        // Запускаем снаряд без случайного отклонения.
-        this.shoot(
-                normalizedDirection.x,
-                normalizedDirection.y,
-                normalizedDirection.z,
-                speed,
-                0.0F);
+        // Устанавливаем скорость напрямую по нормализованному направлению.
+        // Так снаряд не получает случайного разброса.
+        this.setDeltaMovement(normalizedDirection.scale(speed));
     }
 
     /**
