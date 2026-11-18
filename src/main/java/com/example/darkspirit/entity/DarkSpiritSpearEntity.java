@@ -52,8 +52,14 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
     // Начальная позиция копья нужна для ограничения дальности полёта.
     private Vec3 launchPosition;
 
-    // Максимальная дальность полёта копья от места запуска — 20 блоков.
-    private static final double MAX_TRAVEL_DISTANCE = 20.0D;
+    // Максимальная дальность полёта копья от места запуска — 35 блоков.
+    private static final double MAX_TRAVEL_DISTANCE = 35.0D;
+
+    // Время жизни копья — 5 секунд (100 игровых тиков при 20 тиках в секунду).
+    private static final int MAX_LIFETIME_TICKS = 100;
+
+    // Сколько серверных тиков копьё уже существует.
+    private int lifetimeTicks = 0;
 
     // Отдельный тип урона копья, который не блокируется щитом.
     private static final ResourceKey<DamageType> SPEAR_DAMAGE_TYPE =
@@ -164,10 +170,22 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
         // Здесь также обрабатывается возможное столкновение с блоком или игроком.
         super.tick();
 
+        // Считаем время жизни на сервере, чтобы клиент не удалял копьё самостоятельно.
+        if (!this.level().isClientSide()) {
+            this.lifetimeTicks++;
+
+            // Удаляем копьё через 5 секунд, даже если оно застряло в стене.
+            if (this.lifetimeTicks >= MAX_LIFETIME_TICKS) {
+                this.discard();
+                return;
+            }
+        }
+
         // Если предел дальности достигнут без столкновения с блоком, удаляем снаряд.
-        // При попадании в блок телепортация должна завершиться, поэтому его не удаляем.
+        // При попадании в блок телепортация завершается, а снаряд доживает до таймера.
         if (removeAtMaxRange && !this.stuckInBlock) {
             this.discard();
+            return;
         }
 
         // Пока копьё летит, каждый тик направляем его нос по вектору скорости.
