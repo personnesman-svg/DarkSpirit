@@ -361,11 +361,14 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                     30.0F,
                     30.0F);
 
-            // Вычисляем расстояние до игрока.
-            double distanceSquared = this.spirit.distanceToSqr(target);
+            // Вычисляем горизонтальное расстояние до игрока.
+            double dx = target.getX() - this.spirit.getX();
+            double dz = target.getZ() - this.spirit.getZ();
 
-            // Если игрок дальше 6 блоков — приближаемся.
-            if (distanceSquared > 36.0D) {
+            double horizontalDistanceSquared = dx * dx + dz * dz;
+
+            // Если игрок дальше 6 блоков по горизонтали — приближаемся.
+            if (horizontalDistanceSquared > 36.0D) {
 
                 this.spirit.getMoveControl().setWantedPosition(
                         target.getX(),
@@ -377,11 +380,16 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
 
                 // Если приблизились — прекращаем движение.
                 this.spirit.getMoveControl().setWait();
-                // Если игрок рядом, начинаем подготовку броска.
-                this.spirit.startSpearAttack(target);
+
                 // Плавно гасим оставшуюся скорость.
                 this.spirit.setDeltaMovement(
                         this.spirit.getDeltaMovement().scale(0.65D));
+            }
+
+            // Начинаем подготовку атаки в пределах 7 блоков.
+            // Проверка не зависит от высоты полёта Духа.
+            if (horizontalDistanceSquared <= 49.0D) {
+                this.spirit.startSpearAttack(target);
             }
         }
 
