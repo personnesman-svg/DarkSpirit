@@ -110,9 +110,37 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     @Override
     public void tick() {
 
-        // Сервер уменьшает перезарядку между бросками.
-        if (!this.level().isClientSide() && this.spearCooldownTicks > 0) {
-            this.spearCooldownTicks--;
+        // При первом серверном обновлении запоминаем место появления Духа.
+        // Эти координаты нужны для ограниченного патрулирования вокруг точки спавна.
+        if (!this.level().isClientSide() && !this.flightCenterSet) {
+            this.flightCenterX = this.getX();
+            this.flightCenterY = this.getY();
+            this.flightCenterZ = this.getZ();
+
+            this.flightCenterSet = true;
+        }
+
+        // КРИТИЧЕСКИ ВАЖНО:
+        // Выполняем штатное обновление Minecraft.
+        // Здесь обновляются ИИ, цели, контроллер движения, навигация и физика моба.
+        super.tick();
+
+        // Таймеры нашего мода изменяем только на сервере.
+        if (!this.level().isClientSide()) {
+
+            // Уменьшаем перезарядку между бросками копья.
+            if (this.spearCooldownTicks > 0) {
+                this.spearCooldownTicks--;
+            }
+
+            // После завершения патрульного перелёта постепенно гасим скорость.
+            if (this.flightPauseTicks > 0) {
+                this.flightPauseTicks--;
+
+                // Плавно уменьшаем скорость, чтобы Дух не останавливался резко.
+                this.setDeltaMovement(
+                        this.getDeltaMovement().scale(0.80D));
+            }
         }
     }
 
