@@ -26,10 +26,10 @@ public class DarkSpiritSpearModel<T extends GeoAnimatable> extends GeoModel<T> {
             "dark_spirit",
             "textures/entity/dark_spirit_spear.png");
 
-    // Путь к файлу анимаций копья.
+    // Используем существующий файл анимаций Духа тьмы.
     private static final Identifier ANIMATIONS = Identifier.fromNamespaceAndPath(
             "dark_spirit",
-            "entity/dark_spirit_spear");
+            "entity/dark_spirit");
 
     /**
      * Возвращает геометрию копья.
