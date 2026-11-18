@@ -49,6 +49,12 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
     // Показывает, застряло ли копьё в блоке.
     private boolean stuckInBlock = false;
 
+    // Начальная позиция копья нужна для ограничения дальности полёта.
+    private Vec3 launchPosition;
+
+    // Максимальная дальность полёта копья от места запуска — 20 блоков.
+    private static final double MAX_TRAVEL_DISTANCE = 20.0D;
+
     // Отдельный тип урона копья, который не блокируется щитом.
     private static final ResourceKey<DamageType> SPEAR_DAMAGE_TYPE =
             ResourceKey.create(
@@ -113,13 +119,56 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
     @Override
     public void tick() {
 
+        // Флаг показывает, что на этом тике копьё достигнет предельной дальности.
+        boolean removeAtMaxRange = false;
+
+        // Проверяем дальность только на сервере и только пока копьё летит.
+        if (!this.level().isClientSide() && !this.stuckInBlock) {
+
+            // При первом обновлении запоминаем точку, из которой копьё начало полёт.
+            if (this.launchPosition == null) {
+                this.launchPosition = this.position();
+            }
+
+            // Считаем, сколько блоков копьё уже пролетело от точки запуска.
+            double travelledDistance = this.position().distanceTo(this.launchPosition);
+            double remainingDistance = MAX_TRAVEL_DISTANCE - travelledDistance;
+
+            // На случай, если копьё уже достигло предела, сразу удаляем его.
+            if (remainingDistance <= 0.0D) {
+                this.discard();
+                return;
+            }
+
+            // Проверяем, не превысит ли следующий шаг оставшуюся дальность.
+            Vec3 velocity = this.getDeltaMovement();
+            double stepDistance = velocity.length();
+
+            if (stepDistance > 0.0D && stepDistance >= remainingDistance) {
+
+                // Укорачиваем последний шаг, чтобы копьё не пролетело дальше 20 блоков.
+                this.setDeltaMovement(
+                        velocity.scale(remainingDistance / stepDistance));
+
+                // После обработки столкновений удалим копьё, если оно ни во что не попало.
+                removeAtMaxRange = true;
+            }
+        }
+
         // Если копьё застряло, оставляем его на месте.
         if (this.stuckInBlock) {
             this.setDeltaMovement(Vec3.ZERO);
         }
 
         // Стандартное обновление снаряда Minecraft.
+        // Здесь также обрабатывается возможное столкновение с блоком или игроком.
         super.tick();
+
+        // Если предел дальности достигнут без столкновения с блоком, удаляем снаряд.
+        // При попадании в блок телепортация должна завершиться, поэтому его не удаляем.
+        if (removeAtMaxRange && !this.stuckInBlock) {
+            this.discard();
+        }
 
         // Пока копьё летит, каждый тик направляем его нос по вектору скорости.
         if (!this.stuckInBlock) {
@@ -186,6 +235,9 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
                     hitResult.getDirection().getStepY(),
                     hitResult.getDirection().getStepZ())
                     .scale(0.75D);
+
+            // Запускаем анимацию телепортации на стороне Духа.
+            spirit.playTeleportAnimation();
 
             // Переносим Духа к месту попадания копья.
             Vec3 teleportPosition = hitResult.getLocation().add(faceOffset);
