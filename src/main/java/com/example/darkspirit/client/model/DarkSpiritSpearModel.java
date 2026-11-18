@@ -1,7 +1,7 @@
 package com.example.darkspirit.client.model;
 
 // GeckoLib: базовые классы для 3D-модели.
-import com.geckolib.animatable.GeoAnimatable;
+import com.example.darkspirit.entity.DarkSpiritSpearEntity;
 import com.geckolib.model.GeoModel;
 import com.geckolib.renderer.base.GeoRenderState;
 
@@ -14,7 +14,7 @@ import net.minecraft.resources.Identifier;
  * T — тип объекта GeckoLib, который будет использовать эту модель.
  * Позже здесь укажем нашу сущность копья.
  */
-public class DarkSpiritSpearModel<T extends GeoAnimatable> extends GeoModel<T> {
+public class DarkSpiritSpearModel extends GeoModel<DarkSpiritSpearEntity> {
 
     // Путь к геометрии копья.
     private static final Identifier MODEL = Identifier.fromNamespaceAndPath(
@@ -34,9 +34,8 @@ public class DarkSpiritSpearModel<T extends GeoAnimatable> extends GeoModel<T> {
     /**
      * Возвращает геометрию копья.
      */
-    @Override
-    public Identifier getModelResource(GeoRenderState renderState) {
-        return MODEL;
+    public Identifier getAnimationResource(DarkSpiritSpearEntity animatable) {
+        return ANIMATIONS;
     }
 
     /**
