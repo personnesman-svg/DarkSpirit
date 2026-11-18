@@ -98,6 +98,41 @@ public class DarkSpiritSpearEntity extends ThrowableProjectile implements GeoEnt
 
         // Стандартное обновление снаряда Minecraft.
         super.tick();
+
+        // Пока копьё летит, каждый тик направляем его нос по вектору скорости.
+        if (!this.stuckInBlock) {
+            this.alignToVelocity();
+        }
+    }
+
+    /**
+     * Выравнивает модель копья вдоль текущего направления полёта.
+     */
+    public void alignToVelocity() {
+
+        Vec3 velocity = this.getDeltaMovement();
+
+        if (velocity.lengthSqr() < 1.0E-7D) {
+            return;
+        }
+
+        // Горизонтальная составляющая скорости нужна для расчёта наклона.
+        double horizontalSpeed = Math.sqrt(
+                velocity.x * velocity.x + velocity.z * velocity.z);
+
+        // Модель направлена вдоль локальной оси Z.
+        // Эти углы учитывают систему поворотов рендерера GeckoLib.
+        float yaw = (float) (
+                Math.atan2(velocity.z, velocity.x) * 180.0D / Math.PI)
+                + 90.0F;
+
+        // Отрицательный знак нужен, чтобы подъём траектории поднимал острие копья.
+        float pitch = (float) (
+                -Math.atan2(velocity.y, horizontalSpeed)
+                        * 180.0D / Math.PI);
+
+        this.setYRot(yaw);
+        this.setXRot(pitch);
     }
 
     /**
