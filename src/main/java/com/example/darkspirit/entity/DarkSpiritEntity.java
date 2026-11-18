@@ -44,25 +44,14 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     // Анимация движения в воздухе.
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop("fly");
 
-    // Анимация броска: проигрывается один раз, без зацикливания.
-    private static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("attack");
-
-    // Радиус, в котором Дух замечает игроков.
+    // Радиус поиска ближайшего игрока.
     private static final double PLAYER_DETECTION_RANGE = 24.0D;
 
-    // Радиус начала броска копья по горизонтали.
-    private static final double SPEAR_ATTACK_RANGE = 7.0D;
+    // Интервал между выстрелами: 40 тиков = 2 секунды.
+    private static final int SPEAR_COOLDOWN_TICKS = 40;
 
-    // Перезарядка между бросками копья.
+    // Счётчик перезарядки копья.
     private int spearCooldownTicks = 0;
-
-    // Сколько тиков осталось до вылета копья после начала анимации атаки.
-    // Значение -1 означает, что бросок сейчас не подготовлен.
-    private int spearLaunchDelayTicks = -1;
-
-    // Цель, которую Дух выбрал для текущего броска.
-    // Поле используется только на сервере.
-    private LivingEntity pendingSpearTarget;
 
     // Координаты места, где дух появился.
     private double flightCenterX;
@@ -132,72 +121,33 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         // Боевой ИИ и создание снарядов выполняются только на сервере.
         if (!this.level().isClientSide()) {
 
-            // Находим ближайшего живого игрока самостоятельно.
-            // Это не использует ванильные боевые фильтры TargetingConditions,
-            // которые не выбирают игроков в творческом режиме.
-            LivingEntity previousTarget = this.getTarget();
-            Player nearestPlayer = this.findNearestPlayer();
-
-            // Устанавливаем ближайшего игрока целью.
-            // Наблюдателей не выбираем, творческий режим для тестирования разрешён.
-            this.setTarget(nearestPlayer);
-
-            // Записываем в лог только смену цели, а не каждую игровую итерацию.
-            if (nearestPlayer != previousTarget) {
-                if (nearestPlayer != null) {
-                    DarkSpirit.LOGGER.info(
-                            "[DarkSpirit] Цель обнаружена: {}, расстояние={}",
-                            nearestPlayer.getName().getString(),
-                            this.distanceTo(nearestPlayer));
-                } else if (previousTarget != null) {
-                    DarkSpirit.LOGGER.info(
-                            "[DarkSpirit] Игрок вышел из радиуса обнаружения.");
-                }
-            }
-
-            // Уменьшаем перезарядку между атаками.
+            // Уменьшаем время до следующего выстрела.
             if (this.spearCooldownTicks > 0) {
                 this.spearCooldownTicks--;
             }
 
-            // Обрабатываем задержку между анимацией замаха и вылетом копья.
-            if (this.spearLaunchDelayTicks > 0) {
-                this.spearLaunchDelayTicks--;
+            // Каждый серверный тик ищем ближайшего живого игрока.
+            // Поиск не зависит от NearestAttackableTargetGoal и игрового режима.
+            Player nearestPlayer = this.findNearestPlayer();
 
-                // Когда задержка закончилась, запускаем копьё.
-                if (this.spearLaunchDelayTicks == 0) {
-                    LivingEntity target = this.pendingSpearTarget;
+            // Назначаем игрока целью для существующей логики преследования.
+            this.setTarget(nearestPlayer);
 
-                    // Сбрасываем подготовленный бросок до создания снаряда.
-                    this.pendingSpearTarget = null;
-                    this.spearLaunchDelayTicks = -1;
+            // Самый простой тестовый боевой цикл:
+            // если игрок найден, сразу выпускаем копьё в его сторону.
+            // Не ждём анимацию, дистанцию остановки или отдельную AI-цель.
+            if (nearestPlayer != null && this.spearCooldownTicks <= 0) {
 
-                    // Если цель ещё жива, выполняем бросок.
-                    if (target != null && target.isAlive()) {
-                        this.throwSpearAt(target);
-                    }
-                }
-            }
+                DarkSpirit.LOGGER.info(
+                        "[DarkSpirit] Игрок найден, выпускаю копьё в сторону {}",
+                        nearestPlayer.getName().getString());
 
-            // Атаку проверяем здесь, а не внутри ChasePlayerGoal.
-            // Так запуск броска не зависит от частоты обновления GoalSelector.
-            LivingEntity target = this.getTarget();
+                // Перезарядка устанавливается сразу, чтобы не создавать
+                // десятки копий за один игровой тик.
+                this.spearCooldownTicks = SPEAR_COOLDOWN_TICKS;
 
-            if (target != null
-                    && target.isAlive()
-                    && this.spearCooldownTicks <= 0
-                    && this.spearLaunchDelayTicks < 0) {
-
-                // Для дистанции атаки учитываем только горизонтальную плоскость.
-                double dx = target.getX() - this.getX();
-                double dz = target.getZ() - this.getZ();
-                double horizontalDistanceSquared = dx * dx + dz * dz;
-
-                // Начинаем атаку, когда игрок находится в заданном радиусе.
-                if (horizontalDistanceSquared
-                        <= SPEAR_ATTACK_RANGE * SPEAR_ATTACK_RANGE) {
-                    this.startSpearAttack(target);
-                }
+                // Создаём и запускаем копьё прямо сейчас.
+                this.throwSpearAt(nearestPlayer);
             }
 
             // После завершения патрульного перелёта постепенно гасим скорость.
@@ -245,50 +195,12 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     }
 
     /**
-     * Начинает подготовку броска копья.
-     *
-     * Этот метод вызывается из серверного tick() сущности,
-     * поэтому он не зависит от обновления отдельной AI-цели.
-     */
-    private void startSpearAttack(LivingEntity target) {
-
-        // Атаковать можно только на сервере.
-        if (this.level().isClientSide()) {
-            return;
-        }
-
-        // Не начинаем атаку без живой цели или во время перезарядки.
-        if (target == null
-                || !target.isAlive()
-                || this.spearCooldownTicks > 0
-                || this.spearLaunchDelayTicks >= 0) {
-            return;
-        }
-
-        // Запоминаем цель до момента фактического броска.
-        this.pendingSpearTarget = target;
-
-        // Запускаем 5-секундную перезарядку.
-        this.spearCooldownTicks = 100;
-
-        // Копьё вылетит через 28 тиков (примерно 1,4 секунды).
-        this.spearLaunchDelayTicks = 28;
-
-        // Запускаем отдельную одноразовую анимацию броска GeckoLib.
-        this.triggerAnim("base", "attack");
-
-        // Диагностическое сообщение появляется только один раз за атаку.
-        DarkSpirit.LOGGER.info(
-                "[DarkSpirit] Начал подготовку броска в сторону {}",
-                target.getName().getString());
-    }
-
-    /**
      * Создаёт и запускает копьё в сторону цели.
      */
     private void throwSpearAt(LivingEntity target) {
 
-        if (this.level().isClientSide() || !target.isAlive()) {
+        // Снаряды создаём исключительно на сервере.
+        if (this.level().isClientSide() || target == null || !target.isAlive()) {
             return;
         }
 
@@ -328,21 +240,34 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                 spawnPosition.y,
                 spawnPosition.z);
 
-        // Запускаем копьё со скоростью 1,1 блока за тик.
-        spear.launch(this, direction, 1.1F);
+        // Назначаем владельца — Духа тьмы.
+        spear.setOwner(this);
 
-        // Добавляем снаряд в мир с сервера.
+        // Задаём скорость напрямую: 0,9 блока за тик в сторону игрока.
+        // Нормализация гарантирует одинаковую скорость при любом расстоянии.
+        Vec3 velocity = direction.normalize().scale(0.9D);
+        spear.setDeltaMovement(velocity);
+
+        // Поворачиваем снаряд по направлению движения.
+        spear.setYRot((float) (Math.atan2(velocity.z, velocity.x) * 180.0D / Math.PI) + 90.0F);
+        spear.setXRot((float) (Math.atan2(
+                velocity.y,
+                Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z))
+                * 180.0D / Math.PI));
+
+        // Добавляем снаряд в мир.
         boolean added = this.level().addFreshEntity(spear);
 
-        // Если сервер отказался добавить копьё, оставляем понятную причину в логе.
+        // Подтверждаем создание копья в журнале игры.
         if (added) {
             DarkSpirit.LOGGER.info(
-                    "[DarkSpirit] Копьё создано: скорость={}, позиция={}",
+                    "[DarkSpirit] КОПЬЁ ДОБАВЛЕНО: скорость={}, позиция={}, цель={}",
                     spear.getDeltaMovement(),
-                    spear.position());
+                    spear.position(),
+                    target.getName().getString());
         } else {
             DarkSpirit.LOGGER.error(
-                    "[DarkSpirit] Minecraft отказался добавить сущность копья в мир.");
+                    "[DarkSpirit] ОШИБКА: Minecraft не добавил копьё в мир.");
         }
     }
 
@@ -385,10 +310,7 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                             }
 
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        })
-                        // Одноразовая анимация броска. При вызове triggerAnim
-                        // GeckoLib временно проигрывает её вместо обычного состояния.
-                        .triggerableAnim("attack", ATTACK));
+                        }));
     }
 
     /**
