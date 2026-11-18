@@ -41,8 +41,7 @@ public class DarkSpiritSpearRenderer
         super.applyRotations(renderPassInfo, poseStack, nativeScale);
 
         // Берём угол наклона, который сущность вычисляет из скорости.
-        float pitch = renderPassInfo.renderState()
-                .getOrDefaultGeckolibData(DataTickets.ENTITY_PITCH, 0.0F);
+        float pitch = renderPassInfo.getOrDefaultGeckolibData(DataTickets.ENTITY_PITCH, 0.0F);
 
         // Поворачиваем модель вокруг X, чтобы острие смотрело по траектории.
         poseStack.mulPose(Axis.XP.rotationDegrees(pitch));
