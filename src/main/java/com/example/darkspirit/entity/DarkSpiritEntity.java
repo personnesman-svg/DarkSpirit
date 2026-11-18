@@ -3,6 +3,9 @@ package com.example.darkspirit.entity;
 import net.minecraft.world.entity.monster.Ghast;
 import java.util.EnumSet;
 import net.minecraft.world.entity.ai.goal.Goal;
+import com.geckolib.animation.object.LoopType;
+import com.geckolib.animation.object.PlayState;
+import com.example.darkspirit.DarkSpirit;
 
 // GeckoLib 5: анимации сущности.
 import com.geckolib.animatable.GeoEntity;
@@ -44,8 +47,8 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     // Анимация движения в воздухе.
     private static final RawAnimation FLY = RawAnimation.begin().thenLoop("fly");
 
-    // Одноразовая анимация броска копья.
-    private static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("attack");
+    // Анимация броска: проигрывается один раз, без зацикливания.
+    private static final RawAnimation ATTACK = RawAnimation.begin().then("attack", LoopType.PLAY_ONCE);
 
     // Перезарядка между бросками.
     private int spearCooldownTicks = 0;
@@ -144,20 +147,17 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                     LivingEntity target = this.spearTarget;
                     this.spearTarget = null;
 
+                    // Сбрасываем задержку, чтобы разрешить следующие атаки.
+                    this.spearLaunchDelay = -1;
+
+                    DarkSpirit.LOGGER.info("[DarkSpirit] Время броска!");
+
                     if (target != null && target.isAlive()) {
                         this.throwSpearAt(target);
                     }
                 }
             }
 
-            // Завершаем одноразовую анимацию атаки.
-            if (this.attackAnimationTicks > 0) {
-                this.attackAnimationTicks--;
-
-                if (this.attackAnimationTicks == 0) {
-                    this.stopTriggeredAnim("base", "attack");
-                }
-            }
         }
 
         super.tick();
@@ -196,11 +196,11 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         // Следующий бросок возможен через 4 секунды.
         this.spearCooldownTicks = 80;
 
-        // Анимация длится 2,5 секунды.
-        this.attackAnimationTicks = 50;
+        // Запускаем анимацию броска через отдельный контроллер.
+        this.triggerAnim("spear_attack", "throw");
 
-        // Отправляем команду GeckoLib воспроизвести атаку.
-        this.triggerAnim("base", "attack");
+        // Временное сообщение для проверки.
+        DarkSpirit.LOGGER.info("[DarkSpirit] Начинаю подготовку броска.");
     }
 
     /**
@@ -252,7 +252,12 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         spear.launch(this, direction, 1.1F);
 
         // Добавляем копьё в игровой мир.
-        this.level().addFreshEntity(spear);
+        boolean added = this.level().addFreshEntity(spear);
+
+        // Временно проверяем результат добавления.
+        DarkSpirit.LOGGER.info(
+                "[DarkSpirit] Копьё добавлено в мир: {}",
+                added);
     }
 
     /**
@@ -278,22 +283,28 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
     @Override
     public void registerControllers(
             AnimatableManager.ControllerRegistrar controllers) {
+
+        // Первый контроллер отвечает за полёт и покой.
         controllers.add(
                 new AnimationController<>(
                         "base",
                         5,
                         state -> {
 
-                            // Если Дух движется, воспроизводим полёт.
                             if (state.isMoving()) {
                                 return state.setAndContinue(FLY);
                             }
 
-                            // Если Дух стоит, воспроизводим покой.
                             return state.setAndContinue(IDLE_WITHOUT_SPEAR);
-                        })
-                        // Регистрируем одноразовую анимацию атаки.
-                        .triggerableAnim("attack", ATTACK));
+                        }));
+
+        // Второй контроллер отвечает только за бросок копья.
+        controllers.add(
+                new AnimationController<>(
+                        "spear_attack",
+                        0,
+                        state -> PlayState.STOP)
+                        .triggerableAnim("throw", ATTACK));
     }
 
     /**
