@@ -62,7 +62,7 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
                 new NearestAttackableTargetGoal<>(
                         this,
                         Player.class,
-                        true));
+                        false));
 
         // Приоритет 2: преследуем найденного игрока.
         this.goalSelector.addGoal(
@@ -182,9 +182,12 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
          */
         @Override
         public boolean canUse() {
-            LivingEntity target = this.spirit.getTarget();
 
-            return target != null && target.isAlive();
+            // Если игрок обнаружен, патрулирование запрещено.
+            return this.spirit.getTarget() == null
+                    && this.spirit.flightCenterSet
+                    && this.spirit.flightPauseTicks <= 0
+                    && !this.spirit.getMoveControl().hasWanted();
         }
 
         /**
@@ -194,7 +197,7 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
         public boolean canContinueToUse() {
             LivingEntity target = this.spirit.getTarget();
 
-            return target != null && target.isAlive();
+            return this.spirit.getTarget() == null && distanceSquared > 2.25 && this.flightTicks < 100;
         }
 
         /**
@@ -231,6 +234,10 @@ public class DarkSpiritEntity extends PathfinderMob implements GeoEntity, Enemy 
 
                 // Если приблизились — прекращаем движение.
                 this.spirit.getMoveControl().setWait();
+
+                // Плавно гасим оставшуюся скорость.
+                this.spirit.setDeltaMovement(
+                        this.spirit.getDeltaMovement().scale(0.65D));
             }
         }
 
