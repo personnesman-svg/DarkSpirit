@@ -6,7 +6,7 @@ import com.geckolib.renderer.GeoEntityRenderer;
 // Событие регистрации рендереров NeoForge.
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import com.example.darkspirit.client.model.DarkSpiritModel;
-import com.example.darkspirit.client.model.DarkSpiritSpearModel;
+import com.example.darkspirit.client.renderer.DarkSpiritSpearRenderer;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -46,12 +46,10 @@ public class DarkSpiritClient {
                         context,
                         new DarkSpiritModel()));
 
-        // Подключаем модель летящего копья.
+        // Подключаем рендерер копья с поддержкой горизонтального и вертикального поворота.
         event.registerEntityRenderer(
                 ModEntities.DARK_SPIRIT_SPEAR.get(),
-                context -> new GeoEntityRenderer<>(
-                        context,
-                        new DarkSpiritSpearModel()));
+                DarkSpiritSpearRenderer::new);
     }
 
     @SubscribeEvent
